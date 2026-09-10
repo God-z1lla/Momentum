@@ -46,6 +46,12 @@ const modal = document.getElementById('addRoutineModal');
 const volumeChart = document.getElementById('volumeChart');
 const chartRange = document.getElementById('chartRange');
 const chartState = document.getElementById('chartState');
+const volumeTooltip = document.getElementById('volumeTooltip');
+const volumeHoverDot = document.getElementById('volumeHoverDot');
+const volumeHoverLine = document.getElementById('volumeHoverLine');
+let volumeSeries = [];
+let volumePoints = [];
+let volumeChartWidth = 0;
 const drawVolumeChart = (series) => {
     if (!volumeChart) return;
     const context = volumeChart.getContext('2d');
@@ -71,6 +77,9 @@ const drawVolumeChart = (series) => {
         chartBottom - (smoothValues[index] / 100) * (chartBottom - chartTop),
     ]);
     const coordinates = points;
+    volumeSeries = series;
+    volumePoints = coordinates;
+    volumeChartWidth = width;
     const drawWave = () => {
         if (!coordinates.length) return;
         context.moveTo(coordinates[0][0], coordinates[0][1]);
@@ -122,6 +131,40 @@ const drawVolumeChart = (series) => {
     context.lineCap = 'round';
     context.stroke();
 };
+const showVolumeTooltip = (event) => {
+    if (!volumeTooltip || !volumeChart || !volumeSeries.length) return;
+    const bounds = volumeChart.getBoundingClientRect();
+    const x = Math.max(0, Math.min(volumeChartWidth, event.clientX - bounds.left));
+    const index = Math.max(0, Math.min(volumeSeries.length - 1, Math.round((x / volumeChartWidth) * (volumeSeries.length - 1))));
+    const item = volumeSeries[index];
+    const point = volumePoints[index];
+    const completed = Number(item.completed || 0);
+    const expected = Number(item.expected || 0);
+    const percent = expected ? Math.round((completed / expected) * 100) : 0;
+    const wrapBounds = volumeChart.parentElement.getBoundingClientRect();
+    const visualX = bounds.left - wrapBounds.left + point[0];
+    const visualY = bounds.top - wrapBounds.top + point[1];
+    volumeTooltip.textContent = `${item.date} · ${completed}/${expected} minutes · ${percent}%`;
+    volumeTooltip.hidden = false;
+    volumeTooltip.style.left = `${Math.min(Math.max(8, visualX - 70), Math.max(8, wrapBounds.width - 150))}px`;
+    if (volumeHoverDot) {
+        volumeHoverDot.hidden = false;
+        volumeHoverDot.style.left = `${visualX - 5}px`;
+        volumeHoverDot.style.top = `${visualY - 5}px`;
+    }
+    if (volumeHoverLine) {
+        volumeHoverLine.hidden = false;
+        volumeHoverLine.style.left = `${visualX}px`;
+    }
+};
+const hideVolumeTooltip = () => {
+    if (volumeTooltip) volumeTooltip.hidden = true;
+    if (volumeHoverDot) volumeHoverDot.hidden = true;
+    if (volumeHoverLine) volumeHoverLine.hidden = true;
+};
+volumeChart?.addEventListener('pointermove', showVolumeTooltip);
+volumeChart?.addEventListener('pointerdown', showVolumeTooltip);
+volumeChart?.addEventListener('pointerleave', hideVolumeTooltip);
 const loadAnalytics = async () => {
     if (!volumeChart || !chartRange) return;
     chartState.textContent = 'Loading activity...';
@@ -215,7 +258,7 @@ const drawInsight = (series, days) => {
         const wrapBounds = insightChart.parentElement.getBoundingClientRect();
         const visualX = chartBounds.left - wrapBounds.left + insightPoints[index][0];
         const visualY = chartBounds.top - wrapBounds.top + insightPoints[index][1];
-        insightTooltip.textContent = `${item.date} · ${completed}/${total} completed · ${total ? Math.round(completed / total * 100) : 0}%`;
+        insightTooltip.textContent = `${item.date} · ${completed}/${total} minutes · ${total ? Math.round(completed / total * 100) : 0}%`;
         insightTooltip.hidden = false;
         insightTooltip.style.left = `${Math.min(Math.max(8, visualX - 70), Math.max(8, wrapBounds.width - 150))}px`;
         if (insightHoverDot) {
@@ -246,7 +289,7 @@ const drawInsight = (series, days) => {
     const percent = expected ? Math.round((completed / expected) * 100) : 0;
     insightPercent.textContent = `${percent}%`;
     insightRing.style.setProperty('--insight-progress', `${percent}%`);
-    insightDays.textContent = `${completed} / ${expected} days`;
+    insightDays.textContent = `${completed} / ${expected} minutes`;
     insightTitle.textContent = days === 7 ? 'Week Insight' : 'Month Insight';
     insightSubtitle.textContent = days === 7 ? 'Your progress this week at a glance.' : 'Your progress this month at a glance.';
     insightPeriod.innerHTML = `${days === 7 ? 'WEEK' : 'MONTH'}<br>COMPLETED`;
@@ -275,16 +318,19 @@ const routineCategoryValue = document.getElementById('routineCategoryValue');
 const newRoutineCategoryField = document.getElementById('newRoutineCategoryField');
 const newRoutineCategory = document.getElementById('newRoutineCategory');
 
-routineCategorySelect?.addEventListener('change', () => {
-    const isNewCategory = routineCategorySelect.value === '__new__';
+const updateRoutineCategoryState = (focusNewCategory = false) => {
+    const isNewCategory = routineCategorySelect?.value === '__new__';
     if (routineCategoryValue && !isNewCategory) routineCategoryValue.value = routineCategorySelect.value;
     if (newRoutineCategoryField) newRoutineCategoryField.hidden = !isNewCategory;
     if (newRoutineCategory) {
         newRoutineCategory.required = isNewCategory;
         if (isNewCategory) routineCategoryValue.value = '';
-        if (isNewCategory) newRoutineCategory.focus();
+        if (isNewCategory && focusNewCategory) newRoutineCategory.focus();
     }
-});
+};
+
+routineCategorySelect?.addEventListener('change', () => updateRoutineCategoryState(true));
+updateRoutineCategoryState();
 
 newRoutineCategory?.closest('form')?.addEventListener('submit', (event) => {
     if (routineCategorySelect?.value === '__new__') {
@@ -302,6 +348,7 @@ if (modal && openButton) {
     const openModal = () => {
         modal.classList.remove('hidden');
         modal.setAttribute('aria-hidden', 'false');
+        updateRoutineCategoryState(routineCategorySelect?.value === '__new__');
     };
 
     const closeModal = () => {
@@ -636,32 +683,11 @@ document.querySelectorAll('.task-list').forEach((list) => {
             document.getElementById('taskTitle')?.focus();
         });
 
-        document.addEventListener('change', async (event) => {
-            if (!event.target.matches('.routine-card[data-dynamic-date-card] .task-checkbox')) return;
-            const checkbox = event.target;
-            const item = checkbox.closest('.task-item');
-            const card = checkbox.closest('.routine-card');
-            const taskId = item?.dataset.taskId;
-            if (!taskId) return;
-            checkbox.disabled = true;
-            const response = await fetch(`/api/tasks/${taskId}/toggle`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({completed: checkbox.checked, date: getCardDate(card)}),
-            });
-            checkbox.disabled = false;
-            if (response.ok) {
-                item.classList.toggle('is-complete', checkbox.checked);
-                updateTaskCount(card.querySelector('[data-task-list]'));
-            } else {
-                checkbox.checked = !checkbox.checked;
-            }
-        });
         if (response.ok) window.location.reload();
     });
 
     list.addEventListener('change', async (event) => {
-        if (!event.target.matches('.task-checkbox')) return;
+        if (!event.target.matches('.task-checkbox') || event.target.closest('.routine-card[data-dynamic-date-card]')) return;
         const checkbox = event.target;
         const item = checkbox.closest('.task-item');
         const taskId = item?.dataset.taskId;
@@ -696,7 +722,37 @@ document.querySelectorAll('.task-list').forEach((list) => {
         if (payload.routine) updateRoutineCard(card, payload);
         updateRoutineTaskProgress(card);
         updateGlobalStats(payload.stats);
+        await loadInsight(insightSelectedDays);
+        await loadAnalytics();
     });
+});
+
+document.addEventListener('change', async (event) => {
+    if (!event.target.matches('.task-checkbox') || !event.target.closest('.routine-card[data-dynamic-date-card]')) return;
+    const checkbox = event.target;
+    const item = checkbox.closest('.task-item');
+    const card = checkbox.closest('.routine-card');
+    const taskId = item?.dataset.taskId;
+    if (!taskId || !card) return;
+    checkbox.disabled = true;
+    const response = await fetch(`/api/tasks/${taskId}/toggle`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({completed: checkbox.checked, date: getCardDate(card)}),
+    });
+    checkbox.disabled = false;
+    if (!response.ok) {
+        checkbox.checked = !checkbox.checked;
+        return;
+    }
+    const payload = await response.json();
+    item.classList.toggle('is-complete', checkbox.checked);
+    updateTaskCount(card.querySelector('[data-task-list]'));
+    if (payload.routine) updateRoutineCard(card, payload);
+    updateRoutineTaskProgress(card);
+    updateGlobalStats(payload.stats);
+    await loadInsight(insightSelectedDays);
+    await loadAnalytics();
 });
 
 const editRoutineModal = document.getElementById('editRoutineModal');

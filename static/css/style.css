@@ -1023,6 +1023,7 @@ body { background: linear-gradient(135deg, #edf5ff 0%, #f7faff 52%, #eef3ff 100%
 .chart-panel { margin: 24px 0; padding: 20px; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
 .chart-panel canvas { display: block; width: 100%; max-height: 240px; }
 .chart-panel .volume-chart { margin-top: 8px; max-height: 190px; }
+.stats-chart-wrap { position: relative; }
 .chart-legend { display:flex; gap:16px; margin-top:14px; color:var(--muted); font-size:.7rem; font-weight:700; }
 .chart-legend span { display:inline-flex; align-items:center; gap:6px; }
 .legend-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--primary); }

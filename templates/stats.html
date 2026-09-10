@@ -118,7 +118,12 @@
             <div class="section-header"><h2>Completion trend</h2><select id="chartRange"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option><option value="365">1 year</option></select></div>
             <p id="chartState" class="auth-copy">Loading activity...</p>
             <div class="chart-legend" aria-label="Activity chart legend"><span><i class="legend-dot completed"></i>Completed</span></div>
-            <canvas id="volumeChart" class="volume-chart" height="190" aria-label="Completion trend wave chart"></canvas>
+            <div class="stats-chart-wrap">
+                <canvas id="volumeChart" class="volume-chart" height="190" aria-label="Completion trend wave chart"></canvas>
+                <span class="chart-hover-line" id="volumeHoverLine" hidden></span>
+                <span class="chart-hover-dot" id="volumeHoverDot" hidden></span>
+                <div class="chart-tooltip" id="volumeTooltip" hidden></div>
+            </div>
         </section>
 
         <section class="routine-section compact">

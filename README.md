@@ -24,17 +24,20 @@ I hope you guys like it too. ❤️
 
 ## Screenshots
 
+The screenshots below show a populated September 2026 example with distinct routines,
+category organization, task completion history, and monthly progress.
+
 ### Overview
 
-![Routine Tracker overview](screenshots/overview.png)
+![Routine Tracker overview with populated routines](screenshots/overview.png)
 
 ### Statistics
 
-![Routine Tracker statistics](screenshots/stats.png)
+![Routine Tracker statistics for the September demo](screenshots/stats.png)
 
 ### Calendar
 
-![Routine Tracker calendar](screenshots/calendar.png)
+![Routine Tracker calendar with monthly task history](screenshots/calendar.png)
 
 ## Features
 

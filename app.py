@@ -1879,16 +1879,9 @@ def analytics_api():
         series = []
         for offset in range(days):
             day = start + timedelta(days=offset)
-            scheduled_count = completed_count = 0
-            for routine in routines:
-                schedule = conn.execute("SELECT * FROM schedules WHERE routine_id = ?", (routine["id"],)).fetchone()
-                if not routine_expected_on(routine, day, schedule):
-                    continue
-                scheduled_count += 1
-                record = conn.execute("SELECT completed FROM routine_history WHERE routine_id = ? AND completion_date = ?", (routine["id"], day.isoformat())).fetchone()
-                completed_count += int(bool(record and record["completed"]))
-            expected = int(scheduled_count > 0)
-            completed = int(expected and completed_count == scheduled_count)
+            daily = get_calendar_daily_progress(conn, routines, day.isoformat())
+            expected = daily["planned_minutes"]
+            completed = daily["completed_minutes"]
             series.append({"date": day.isoformat(), "expected": expected, "completed": completed, "missed": max(0, expected - completed), "percent": round((completed / expected) * 100) if expected else None})
     return jsonify({"days": days, "series": series})
 
