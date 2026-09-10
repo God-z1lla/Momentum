@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>History | Routine Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="page-shell">
+        <header class="topbar">
+            <div><p class="eyebrow">Progress dashboard</p><h1>History</h1></div>
+            <nav class="topbar-nav"><a href="{{ url_for('index') }}" class="nav-link">Overview</a><a href="{{ url_for('stats_page') }}" class="nav-link">Stats</a><a href="{{ url_for('goals_page') }}" class="nav-link">Goals</a><a href="{{ url_for('calendar_page') }}" class="nav-link active">Calendar</a></nav>
+        </header>
+        <section class="routine-section">
+            <div class="section-header"><h2>Daily record</h2><form><input type="date" name="date" value="{{ selected_date }}"><button class="submit-btn" type="submit">View day</button></form></div>
+            {% if rows %}
+                <div class="routine-grid compact-grid">
+                {% for row in rows %}<article class="routine-card mini-stat-card"><div class="card-head"><span class="tag">{{ row.category or 'General' }}</span><span class="status {% if row.completed %}status-done{% endif %}">{% if row.completed %}Completed{% else %}Not completed{% endif %}</span></div><h3>{{ row.title }}</h3><p>{{ row.minutes_done or 0 }} minutes recorded</p></article>{% endfor %}
+                </div>
+            {% else %}<div class="empty-card"><h3>No routines for this date</h3><p>Create a routine to begin your history.</p></div>{% endif %}
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#19324a">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>Routine Stats</title>
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="page-shell">
+        <header class="topbar">
+            <div>
+                <p class="eyebrow">Progress dashboard</p>
+                <h1>Routine stats</h1>
+            </div>
+            <nav class="topbar-nav">
+                <a href="{{ url_for('index') }}" class="nav-link">Overview</a>
+                <a href="{{ url_for('stats_page') }}" class="nav-link active">Stats</a>
+                <a href="{{ url_for('goals_page') }}" class="nav-link">Goals</a>
+                <a href="{{ url_for('calendar_page') }}" class="nav-link">Calendar</a>
+            </nav>
+        </header>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="flash-wrap">
+                    {% for message in messages %}
+                        <div class="flash-message">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% if not subscription.pro %}
+            <section class="premium-lock">
+                <p class="eyebrow small">Pro analytics</p>
+                <h2>Your progress history is waiting.</h2>
+                <p>Upgrade to Pro to see long-term consistency, detailed trends, and historical comparisons.</p>
+                <div class="premium-prices"><strong>$2.50/month</strong><strong>$30/year</strong></div>
+                <a class="submit-btn" href="#">View upgrade options</a>
+            </section>
+        {% endif %}
+
+        <section class="top-progress-panel stats-hero">
+            <div class="progress-summary">
+                <div>
+                    <p class="eyebrow small">Weekly progress</p>
+                    <h2>How your week is going</h2>
+                </div>
+                <div class="progress-badges">
+                    <span>{{ stats.week_total }} / {{ stats.week_expected if stats.week_expected else 0 }} done</span>
+                </div>
+            </div>
+
+            <div class="progress-track-wrap">
+                <div class="progress-track">
+                    <div class="progress-fill" style="width: {{ stats.week_percent }}%;"></div>
+                </div>
+                <div class="progress-legend">
+                    <span>{{ stats.week_percent }}% completed</span>
+                    <span>{{ stats.today_completed }} today</span>
+                </div>
+            </div>
+
+            <div class="circle-summary">
+                <div class="completion-ring" style="--progress: {{ stats.week_percent }}%;">
+                    <div class="ring-inner">
+                        <strong>{{ stats.week_percent }}%</strong>
+                        <span>done</span>
+                    </div>
+                </div>
+                <div class="ring-caption">Completion</div>
+            </div>
+        </section>
+
+        <section class="stats-grid">
+            <div class="stat-card accent">
+                <span>Today</span>
+                <strong>{{ stats.today_completed }}</strong>
+                <small>completed</small>
+            </div>
+            <div class="stat-card">
+                <span>Week</span>
+                <strong>{{ stats.week_total }}</strong>
+                <small>{{ stats.week_percent }}% of goal</small>
+            </div>
+            <div class="stat-card">
+                <span>Month</span>
+                <strong>{{ stats.month_total }}</strong>
+                <small>{{ stats.month_percent }}% of goal</small>
+            </div>
+            <div class="stat-card">
+                <span>Year</span>
+                <strong>{{ stats.year_total }}</strong>
+                <small>{{ stats.year_percent }}% of goal</small>
+            </div>
+            <div class="stat-card accent">
+                <span>Current streak</span>
+                <strong>{{ stats.current_streak }}</strong>
+                <small>scheduled days</small>
+            </div>
+            <div class="stat-card">
+                <span>Best streak</span>
+                <strong>{{ stats.best_streak }}</strong>
+                <small>scheduled days</small>
+            </div>
+            <div class="stat-card">
+                <span>Missed</span>
+                <strong>{{ stats.total_missed }}</strong>
+                <small>scheduled occurrences</small>
+            </div>
+        </section>
+
+        <section class="chart-panel">
+            <div class="section-header"><h2>Completion trend</h2><select id="chartRange"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option><option value="365">1 year</option></select></div>
+            <p id="chartState" class="auth-copy">Loading activity...</p>
+            <div class="chart-legend" aria-label="Activity chart legend"><span><i class="legend-dot completed"></i>Completed</span></div>
+            <canvas id="volumeChart" class="volume-chart" height="190" aria-label="Completion trend wave chart"></canvas>
+        </section>
+
+        <section class="routine-section compact">
+            <div class="section-header">
+                <h2>Categories</h2>
+                <div class="filter-bar">
+                    <a href="{{ url_for('stats_page') }}" class="filter-pill {% if selected_category == 'all' %}active{% endif %}">All</a>
+                    {% for category in categories %}
+                        <a href="{{ url_for('stats_page', category=category) }}" class="filter-pill {% if selected_category == category %}active{% endif %}">{{ category }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {% if routines %}
+                <div class="routine-grid compact-grid">
+                    {% for routine in routines %}
+                        <article class="routine-card mini-stat-card {% if routine.today_done %}done{% endif %}">
+                            <div class="card-head">
+                                <span class="tag">{{ routine.category }}</span>
+                                <span class="status {% if routine.today_done %}status-done{% endif %}">
+                                    {% if routine.today_done %}Done{% else %}Open{% endif %}
+                                </span>
+                            </div>
+                            <h3>{{ routine.title }}</h3>
+                            <div class="mini-metric-row">
+                                <span>Week</span>
+                                <strong>{{ routine.week_count }} / 7</strong>
+                            </div>
+                            <div class="mini-metric-row">
+                                <span>Month</span>
+                                <strong>{{ routine.month_count }}</strong>
+                            </div>
+                            <div class="mini-metric-row">
+                                <span>Year</span>
+                                <strong>{{ routine.year_count }}</strong>
+                            </div>
+                        </article>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-card">
+                    <h3>No routines for this category yet</h3>
+                    <p>Create a routine to start tracking.</p>
+                </div>
+            {% endif %}
+        </section>
+    </div>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

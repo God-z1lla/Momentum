@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#19324a">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <meta name="vapid-public-key" content="{{ config.get('VAPID_PUBLIC_KEY', '') }}">
+    <title>Routine Tracker</title>
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="page-shell">
+        <div class="sync-status" id="syncStatus" role="status">Online</div>
+        <header class="topbar">
+            <div>
+                <p class="eyebrow">Progress dashboard</p>
+                <h1>Routine Tracker</h1>
+            </div>
+            <div class="topbar-actions">
+                <nav class="topbar-nav">
+                    <a href="{{ url_for('index') }}" class="nav-link active">Overview</a>
+                    <a href="{{ url_for('stats_page') }}" class="nav-link">Stats</a>
+                    <a href="{{ url_for('goals_page') }}" class="nav-link">Goals</a>
+                    <a href="{{ url_for('calendar_page') }}" class="nav-link">Calendar</a>
+                </nav>
+            </div>
+        </header>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="flash-wrap">
+                    {% for message in messages %}
+                        <div class="flash-message">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <section class="insight-card" aria-labelledby="insightTitle">
+            <div class="insight-head">
+                <div class="insight-heading">
+                    <span class="insight-icon" aria-hidden="true">▣</span>
+                    <div>
+                        <p class="eyebrow small">Progress at a glance</p>
+                        <h2 id="insightTitle">Month Insight</h2>
+                        <p id="insightSubtitle">Your progress this month at a glance.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="insight-body">
+                <div class="insight-chart-wrap"><div class="chart-scale" aria-hidden="true"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div><div class="insight-grid" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><canvas id="insightChart" height="190" aria-label="Routine completion trend"></canvas><span class="chart-hover-line" id="insightHoverLine" hidden></span><span class="chart-hover-dot" id="insightHoverDot" hidden></span><div class="chart-tooltip" id="insightTooltip" hidden></div><div class="insight-axis" id="insightAxis" aria-hidden="true"></div></div>
+                <div class="insight-score"><div class="insight-ring" id="insightRing"><div><strong id="insightPercent">0%</strong><span id="insightPeriod">MONTH<br>COMPLETED</span></div></div><p id="insightDays">0 / 0 days</p></div>
+            </div>
+            <div class="insight-toggle" role="group" aria-label="Insight period"><button type="button" class="is-active" data-insight-range="30">Month</button><button type="button" data-insight-range="7">Week</button></div>
+        </section>
+
+        <section class="automation-panel" id="automationList" aria-live="polite" hidden></section>
+
+        <section class="routine-section">
+            <div class="section-header">
+                <div class="routine-heading">
+                    <h2>All routines</h2>
+                    <label class="selected-date-control"><span>Date</span><input type="date" value="{{ selected_date }}" data-selected-date></label>
+                </div>
+                <div class="filter-bar">
+                    <a href="{{ url_for('index') }}" class="filter-pill {% if selected_category == 'all' %}active{% endif %}">All</a>
+                    {% for category_record in category_records %}
+                        <span class="category-filter-group">
+                            <a href="{{ url_for('index', category=category_record.name) }}" class="filter-pill {% if selected_category == category_record.name %}active{% endif %}">{{ category_record.name }}</a>
+                            {% if category_record.name != 'General' %}
+                                <button type="button" class="category-delete-btn" data-category-delete="{{ category_record.id }}" data-category-name="{{ category_record.name }}" aria-label="Delete {{ category_record.name }}" title="Delete {{ category_record.name }}">×</button>
+                            {% endif %}
+                        </span>
+                    {% endfor %}
+                    <button type="button" class="filter-pill category-add-btn" id="openCategoryModal">+ Category</button>
+                    <button type="button" class="filter-pill category-add-btn" id="openReminderModal">+ Reminder</button>
+                    <button type="button" class="filter-pill category-add-btn" id="openAutomationModal">+ Automation</button>
+                </div>
+            </div>
+
+            {% if routines %}
+                <div class="routine-grid">
+                    {% for routine in routines %}
+                        <article class="routine-card {% if routine.today_done %}done{% endif %}" data-routine-id="{{ routine.id }}" data-selected-date="{{ selected_date }}" data-target-minutes="{{ routine.target_minutes }}" data-today-minutes="{{ routine.today_minutes - routine.task_minutes }}">
+                            <div class="card-head">
+                                <span class="tag">{{ routine.category }}</span>
+                                {% if routine.paused %}
+                                    <span class="status" data-status-label>Paused</span>
+                                {% elif routine.today_done %}
+                                    <span class="status status-done" data-status-label>Done today</span>
+                                {% else %}
+                                    <span class="status" data-status-label>Open</span>
+                                {% endif %}
+                                <div class="routine-actions">
+                                    <button type="button" class="routine-action" data-routine-action="edit" data-routine-id="{{ routine.id }}" data-routine-title="{{ routine.title }}" data-routine-description="{{ routine.description or '' }}" data-routine-category="{{ routine.category }}" data-routine-target="{{ routine.target_minutes }}" data-routine-schedule='{{ routine.schedule|tojson if routine.schedule else "" }}' aria-label="Edit {{ routine.title }}" title="Edit routine">✎</button>
+                                    <button type="button" class="routine-action" data-routine-action="pause" data-routine-id="{{ routine.id }}" aria-label="Pause or resume {{ routine.title }}" title="Pause or resume routine">Ⅱ</button>
+                                    <button type="button" class="routine-action" data-routine-action="duplicate" data-routine-id="{{ routine.id }}" aria-label="Duplicate {{ routine.title }}" title="Duplicate routine">⧉</button>
+                                    <button type="button" class="delete-mini-btn" data-routine-id="{{ routine.id }}" data-routine-name="{{ routine.title }}" aria-label="Archive {{ routine.title }}">−</button>
+                                </div>
+                            </div>
+
+                            <div class="title-row">
+                                <h3>{{ routine.title }}</h3>
+                                <span class="target-pill" data-week-progress-label>{{ routine.today_goal_minutes }} min goal • {{ routine.week_progress }}%</span>
+                            </div>
+                            <button type="button" class="add-task-btn" data-open-task-modal data-routine-id="{{ routine.id }}">+ Add task</button>
+                            <div class="routine-tracking-controls">
+                                <button type="button" class="secondary-btn routine-track-btn" data-track-routine-id="{{ routine.id }}" data-track-routine-title="{{ routine.title|e }}" data-track-routine-minutes="{{ routine.target_minutes }}" data-track-goal-minutes="{{ routine.today_goal_minutes }}" data-track-today-minutes="{{ routine.today_minutes - routine.task_minutes }}">Start tracking</button>
+                                <button type="button" class="secondary-btn routine-pause-btn" data-pause-routine-id="{{ routine.id }}" hidden>Pause</button>
+                                <span class="routine-track-progress" data-track-progress>Today: {{ routine.today_minutes }} / {{ routine.today_goal_minutes }} min ({{ routine.today_percent }}%)</span>
+                            </div>
+
+                            {% if routine.description %}
+                                <p>{{ routine.description }}</p>
+                            {% endif %}
+
+                            <div class="task-list" data-task-list>
+                                <div class="task-list-header">
+                                    <span>Tasks</span>
+                                    <span data-task-count>{{ routine.tasks|selectattr('completed')|list|length }} / {{ routine.tasks|length }}</span>
+                                </div>
+                                {% for task in routine.tasks %}
+                                    <div class="task-item {% if task.completed %}is-complete{% endif %}" data-task-id="{{ task.id }}" data-task-minutes="{{ task.target_minutes }}">
+                                        <label>
+                                            <input type="checkbox" class="task-checkbox" {% if task.completed %}checked{% endif %}>
+                                            <span>{{ task.title }}{% if task.target_minutes %} <small>({{ task.target_minutes }} min)</small>{% endif %}</span>
+                                        </label>
+                                        <span class="task-controls">
+                                            <button type="button" class="task-move" data-direction="up" aria-label="Move {{ task.title }} up">↑</button>
+                                            <button type="button" class="task-move" data-direction="down" aria-label="Move {{ task.title }} down">↓</button>
+                                        </span>
+                                    </div>
+                                {% else %}
+                                    <p class="task-empty">Add the first step to this routine.</p>
+                                {% endfor %}
+                            </div>
+
+                            <div class="date-record-wrap week-calendar-wrap">
+                                <div class="week-header">
+                                    <span>Available days</span>
+                                </div>
+                                <div class="week-calendar">
+                                        {% for entry in routine.week_entries %}
+                                            <a class="day-box {% if entry.iso == selected_date %}is-selected{% endif %}" data-day="{{ entry.iso }}" href="{{ url_for('index', category=selected_category, date=entry.iso) }}">
+                                                <span class="day-name">{{ entry.day_name }}</span>
+                                                <span class="day-date">{{ entry.date.day }}</span>
+                                            </a>
+                                        {% endfor %}
+                                </div>
+                                <div class="modal hidden" id="taskModal" aria-hidden="true">
+                                    <div class="modal-backdrop" data-close-task-modal></div>
+                                    <div class="modal-panel small-panel">
+                                        <div class="modal-header"><h3>Add task</h3><button type="button" class="close-btn" id="closeTaskModal" aria-label="Close">×</button></div>
+                                        <form id="taskForm">
+                                            <input type="hidden" id="taskRoutineId">
+                                            <label><span>Task name</span><input id="taskTitle" maxlength="160" required placeholder="Read a chapter"></label>
+                                            <label><span>Task time (minutes)</span><input id="taskMinutes" type="number" min="0" max="1440" step="5" value="20" required></label>
+                                            <button type="submit" class="submit-btn">Add task</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-card">
+                    <h3>No routines yet</h3>
+                    <p>Create your first habit and track it over time.</p>
+                </div>
+            {% endif %}
+        </section>
+    </div>
+
+    <button class="fab" id="openAddModal" aria-label="Add routine">+</button>
+
+    <div class="modal hidden" id="addRoutineModal" aria-hidden="true">
+        <div class="modal-backdrop" data-close-modal></div>
+        <div class="modal-panel">
+            <div class="modal-header">
+                <h3>Add new routine</h3>
+                <button type="button" class="close-btn" id="closeAddModal" aria-label="Close">×</button>
+            </div>
+            <form method="POST" action="{{ url_for('add_routine') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <label>
+                    <span>Title</span>
+                    <input type="text" name="title" placeholder="Morning workout" required>
+                </label>
+                <label>
+                    <span>Description</span>
+                    <textarea name="description" rows="3" placeholder="30 minute routine"></textarea>
+                </label>
+                <label>
+                    <span>Category</span>
+                    <select id="routineCategorySelect">
+                        {% for category_record in category_records %}
+                            <option value="{{ category_record.name }}">{{ category_record.name }}</option>
+                        {% endfor %}
+                        <option value="__new__">Add a new category</option>
+                    </select>
+                    <input type="hidden" name="category" id="routineCategoryValue" value="{{ category_records[0].name if category_records else 'General' }}">
+                </label>
+                <label id="newRoutineCategoryField" hidden>
+                    <span>New category name</span>
+                    <input type="text" id="newRoutineCategory" placeholder="Health">
+                </label>
+                <label>
+                    <span>Goal minutes</span>
+                    <input type="number" name="target_minutes" min="0" step="5" value="20">
+                </label>
+                <button type="submit" class="submit-btn">Save routine</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal hidden" id="timeEntryModal" aria-hidden="true">
+        <div class="modal-backdrop" data-close-time-modal></div>
+        <div class="modal-panel small-panel">
+            <div class="modal-header">
+                <h3>Log minutes</h3>
+                <button type="button" class="close-btn" id="closeTimeModal" aria-label="Close">×</button>
+            </div>
+            <div class="time-entry-content">
+                <p id="timeEntryLabel">Day</p>
+                <label>
+                    <span>Minutes</span>
+                    <input id="timeEntryMinutes" type="number" min="0" step="5" placeholder="20">
+                </label>
+                <input id="timeEntryDay" type="hidden" value="">
+                <div class="time-entry-actions">
+                    <button type="button" class="secondary-btn" id="timeEntryCancel">Cancel</button>
+                    <button type="button" class="submit-btn" id="timeEntryApply">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal hidden" id="deleteConfirmModal" aria-hidden="true">
+        <div class="modal-backdrop" data-close-delete-modal></div>
+        <div class="modal-panel small-panel warning-panel">
+            <div class="modal-header">
+                <h3>Archive routine</h3>
+                <button type="button" class="close-btn" id="closeDeleteModal" aria-label="Close">×</button>
+            </div>
+            <div class="delete-warning">
+                <p>Hide <strong id="deleteRoutineName">this routine</strong> from your active list?</p>
+                <p class="danger-copy">Its history will be preserved.</p>
+            </div>
+            <div class="time-entry-actions">
+                <button type="button" class="secondary-btn" id="cancelDeleteBtn">Cancel</button>
+                <button type="button" class="delete-confirm-btn" id="confirmDeleteBtn">Archive</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal hidden" id="editRoutineModal" aria-hidden="true">
+        <div class="modal-backdrop" data-close-edit-modal></div>
+        <div class="modal-panel">
+            <div class="modal-header">
+                <h3>Edit routine</h3>
+                <button type="button" class="close-btn" id="closeEditModal" aria-label="Close">×</button>
+            </div>
+            <form id="editRoutineForm">
+                <input type="hidden" id="editRoutineId">
+                <label><span>Title</span><input type="text" id="editRoutineTitle" required></label>
+                <label><span>Description</span><textarea id="editRoutineDescription" rows="3"></textarea></label>
+                <label><span>Category</span><input type="text" id="editRoutineCategory"></label>
+                <label><span>Goal minutes</span><input type="number" id="editRoutineTarget" min="0" step="5" required></label>
+                <fieldset class="schedule-fields">
+                    <legend>Schedule</legend>
+                    <label><span>Repeats</span><select id="editScheduleFrequency"><option value="daily">Every day</option><option value="weekly">Selected weekdays</option><option value="monthly">Every month</option></select></label>
+                    <label><span>Time</span><input type="time" id="editScheduleTime"></label>
+                    <label><span>Weekdays for weekly schedules</span><input type="text" id="editScheduleWeekdays" placeholder="0,2,4"></label>
+                    <label><span>Timezone</span><input type="text" id="editScheduleTimezone" value="UTC" placeholder="Europe/London"></label>
+                    <label class="inline-check"><input type="checkbox" id="editScheduleEnabled" checked><span>Schedule enabled</span></label>
+                </fieldset>
+                <button type="submit" class="submit-btn">Save changes</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal hidden" id="categoryModal" aria-hidden="true">
+        <div class="modal-backdrop" data-close-category-modal></div>
+        <div class="modal-panel small-panel">
+            <div class="modal-header">
+                <h3>New category</h3>
+                <button type="button" class="close-btn" id="closeCategoryModal" aria-label="Close">×</button>
+            </div>
+            <form id="categoryForm">
+                <label><span>Name</span><input type="text" id="categoryName" maxlength="60" required placeholder="Health"></label>
+                <button type="submit" class="submit-btn">Create category</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal hidden" id="reminderModal" aria-hidden="true">
+        <div class="modal-backdrop" data-close-reminder-modal></div>
+        <div class="modal-panel small-panel">
+            <div class="modal-header">
+                <h3>New reminder</h3>
+                <button type="button" class="close-btn" id="closeReminderModal" aria-label="Close">×</button>
+            </div>
+            <form id="reminderForm">
+                <label><span>Reminder</span><input type="text" id="reminderTitle" maxlength="180" required placeholder="Start evening routine"></label>
+                <label><span>When</span><input type="datetime-local" id="reminderDueAt" required></label>
+                <label><span>Repeats</span><select id="reminderRecurrence"><option value="once">Once</option><option value="daily">Every day</option><option value="weekly">Every week</option></select></label>
+                <button type="submit" class="submit-btn">Save reminder</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal hidden" id="automationModal" aria-hidden="true"><div class="modal-backdrop" data-close-automation-modal></div><div class="modal-panel small-panel"><div class="modal-header"><h3>Create automation</h3><button type="button" class="close-btn" id="closeAutomationModal" aria-label="Close">×</button></div><form id="automationForm"><label><span>When this task is completed</span><select id="automationTrigger" required><option value="">Choose a task</option></select></label><label><span>Remind me about</span><select id="automationTarget" required><option value="">Choose a task</option></select></label><label><span>Remind after minutes</span><input id="automationDelay" type="number" min="0" value="20" required></label><label><span>Reminder text</span><input id="automationTitle" required value="Follow-up reminder"></label><button class="submit-btn" type="submit">Save automation</button></form></div></div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

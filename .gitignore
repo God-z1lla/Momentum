@@ -1,0 +1,68 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments and local secrets
+.venv/
+.venv-*/
+venv/
+env/
+ENV/
+.env/
+.env.*
+!.env.example
+
+# Test and analysis caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+
+# SQLite and other local databases
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+
+# Logs
+*.log
+logs/
+
+# Build and package output
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local and generated temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Frontend/package-manager caches
+node_modules/
+.npm/
+.cache/
+
+# Personal private backup
+/python run/

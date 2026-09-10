@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token }}"><title>Calendar | Routine Tracker</title><link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"></head>
+<body><div class="page-shell"><header class="topbar"><div><p class="eyebrow">Progress dashboard</p><h1>Calendar</h1></div><nav class="topbar-nav"><a href="{{ url_for('index') }}" class="nav-link">Overview</a><a href="{{ url_for('stats_page') }}" class="nav-link">Stats</a><a href="{{ url_for('goals_page') }}" class="nav-link">Goals</a><a href="{{ url_for('calendar_page') }}" class="nav-link active">Calendar</a></nav></header>
+<section class="calendar-panel">
+    <div class="section-header calendar-heading">
+        <div><p class="eyebrow small">Consistency</p><h2 id="calendarTitle"></h2><p class="calendar-legend">Your routine rhythm, day by day</p></div>
+        <div class="calendar-actions"><button class="filter-pill" id="calendarPrevious" type="button" aria-label="Previous month">‹</button><button class="filter-pill" id="calendarNext" type="button" aria-label="Next month">›</button></div>
+    </div>
+    <div class="calendar-summary" id="calendarSummary" aria-live="polite"></div>
+    <p id="calendarState" class="auth-copy">Loading calendar...</p>
+    <div class="calendar-weekdays" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+    <div class="calendar-grid" id="calendarGrid" aria-live="polite"></div>
+    <section class="calendar-details" id="calendarDetails" hidden aria-live="polite"></section>
+</section></div>
+<script>
+let month = '{{ month }}';
+let selectedDate = '{{ selected_date }}';
+const grid = document.getElementById('calendarGrid'), title = document.getElementById('calendarTitle'), state = document.getElementById('calendarState'), summary = document.getElementById('calendarSummary'), details = document.getElementById('calendarDetails');
+const now = new Date(), today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+function monthName(value) { return new Date(`${value}-02T00:00:00`).toLocaleDateString(undefined, {month: 'long', year: 'numeric'}); }
+function formatDate(value, options) { return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, options); }
+function makeMetric(label, value) { const item = document.createElement('div'); item.className = 'calendar-metric'; const strong = document.createElement('strong'); strong.textContent = value; const caption = document.createElement('span'); caption.textContent = label; item.append(strong, caption); return item; }
+function renderSummary(days) {
+    const relevantDays = days.filter(day => day.date <= today);
+    const scheduled = relevantDays.reduce((sum, day) => sum + day.planned_minutes, 0), completed = relevantDays.reduce((sum, day) => sum + day.completed_minutes, 0);
+    const completeDays = relevantDays.filter(day => day.complete).length;
+    const percent = scheduled ? Math.round(completed / scheduled * 100) : 0;
+    summary.replaceChildren(makeMetric('monthly consistency', `${percent}%`), makeMetric('completed days', `${completeDays}`), makeMetric('routine completions', `${completed}/${scheduled}`));
+}
+async function loadCalendar() {
+    const response = await fetch(`/api/calendar?month=${month}`);
+    if (!response.ok) { state.textContent = 'Unable to load calendar.'; return; }
+    const data = await response.json();
+    title.textContent = monthName(month);
+    renderSummary(data.days);
+    const first = new Date(`${month}-01T00:00:00`), leading = (first.getDay() + 6) % 7, cells = Array.from({length: leading}, () => document.createElement('span'));
+    if (!selectedDate.startsWith(month)) selectedDate = month === today.slice(0, 7) ? today : data.days[0].date;
+    data.days.forEach(day => {
+        const button = document.createElement('button'); button.className = 'calendar-day'; button.type = 'button';
+        const isFuture = day.date > today, isToday = day.date === today, isSelected = day.date === selectedDate;
+        button.classList.toggle('complete', day.complete);
+        button.classList.toggle('partial', day.completed_minutes > 0 && !day.complete);
+        button.classList.toggle('missed', !isFuture && day.completed_minutes === 0 && day.planned_minutes > 0);
+        button.classList.toggle('future', isFuture); button.classList.toggle('today', isToday); button.classList.toggle('selected', isSelected);
+        button.dataset.date = day.date; button.setAttribute('aria-label', `${formatDate(day.date, {month: 'long', day: 'numeric'})}, ${day.percentage}% complete`);
+        const number = document.createElement('strong'); number.textContent = day.date.slice(-2);
+        const status = document.createElement('span'); status.className = 'calendar-day-count'; status.textContent = `${day.completed_minutes} / ${day.planned_minutes} min`;
+        const track = document.createElement('span'); track.className = 'calendar-progress'; const fill = document.createElement('span'); fill.style.width = `${day.percentage}%`; track.append(fill);
+        button.append(number, status, track); button.onclick = () => showDetails(day.date); cells.push(button);
+    });
+    grid.replaceChildren(...cells); state.textContent = 'Select a day to inspect its activity.'; showDetails(selectedDate);
+}
+async function showDetails(date) {
+    const response = await fetch(`/api/history?date=${date}`); if (!response.ok) { details.hidden = false; details.textContent = 'Unable to load day history.'; return; }
+    const data = await response.json(); selectedDate = date; const completed = data.completed_tasks, total = data.total_tasks, percent = data.percentage;
+    details.hidden = false; details.replaceChildren(); window.history.replaceState({}, '', `?month=${month}&date=${date}`);
+    const heading = document.createElement('div'); heading.className = 'calendar-details-heading'; const title = document.createElement('h3'); title.textContent = formatDate(date, {weekday: 'long', month: 'long', day: 'numeric'}); const badge = document.createElement('strong'); badge.textContent = `${percent}% complete`; heading.append(title, badge);
+    const summaryLine = document.createElement('p'); summaryLine.className = 'calendar-details-summary'; summaryLine.textContent = `${data.completed_minutes} / ${data.planned_minutes} min • ${completed} / ${total} tasks completed`;
+    const list = document.createElement('div'); list.className = 'calendar-routine-list';
+    data.routines.forEach(item => {
+        const row = document.createElement('div'); row.className = `calendar-routine ${item.complete ? 'is-complete' : ''}`;
+        const icon = document.createElement('span'); icon.className = 'calendar-routine-icon'; icon.textContent = item.complete ? '✓' : '○';
+        const content = document.createElement('div'); const name = document.createElement('strong'); name.textContent = item.title;
+        const progress = document.createElement('span'); progress.textContent = `${item.completed_minutes} / ${item.planned_minutes} min (${item.percentage}%)`; content.append(name, progress);
+        row.append(icon, content); list.append(row);
+        item.tasks.forEach(task => {
+            const taskRow = document.createElement('div'); taskRow.className = `calendar-task ${task.completed ? 'is-complete' : ''}`;
+            taskRow.textContent = `${task.completed ? '✓' : '○'} ${task.title} — ${task.planned_minutes} min`; list.append(taskRow);
+        });
+    });
+    details.append(heading, summaryLine, list);
+    document.querySelectorAll('.calendar-day').forEach(day => day.classList.toggle('selected', day.dataset.date === date));
+}
+function shiftMonth(offset) { const [year, value] = month.split('-').map(Number); const next = new Date(year, value - 1 + offset, 1); month = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`; selectedDate = month === today.slice(0, 7) ? today : `${month}-01`; window.history.replaceState({}, '', `?month=${month}&date=${selectedDate}`); loadCalendar(); }
+document.getElementById('calendarPrevious').onclick = () => shiftMonth(-1); document.getElementById('calendarNext').onclick = () => shiftMonth(1); loadCalendar();
+</script></body></html>

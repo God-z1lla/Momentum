@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>Goals | Routine Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="page-shell">
+    <header class="topbar">
+        <div><p class="eyebrow">Progress dashboard</p><h1>Goals</h1></div>
+        <nav class="topbar-nav">
+            <a href="{{ url_for('index') }}" class="nav-link">Overview</a><a href="{{ url_for('stats_page') }}" class="nav-link">Stats</a>
+            <a href="{{ url_for('goals_page') }}" class="nav-link active">Goals</a>
+            <a href="{{ url_for('calendar_page') }}" class="nav-link">Calendar</a>
+        </nav>
+    </header>
+    <section class="routine-section">
+        <div class="section-header"><div><p class="eyebrow small">Your direction</p><h2>Long-term goals</h2></div><button class="primary-button" id="new-goal">Add goal</button></div>
+        <div id="goal-form" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="goal-modal-title">
+            <div class="modal-backdrop" id="goal-modal-backdrop"></div>
+            <div class="modal-panel goal-form">
+            <div class="goal-modal-heading"><div><p class="eyebrow small">Goal builder</p><h2 id="goal-modal-title">Add goal</h2></div><button type="button" class="modal-close" id="close-goal" aria-label="Close">×</button></div>
+            <input type="hidden" id="goal-id">
+            <label>Goal name<input id="goal-name" maxlength="160" required placeholder="Become a better version of myself"></label>
+            <label>Description<textarea id="goal-description" rows="2" placeholder="What does success look like?"></textarea></label>
+            <label>Required routines
+                <details class="routine-dropdown">
+                    <summary id="routine-dropdown-label">Select routines</summary>
+                    <div class="goal-routine-picker">{% for routine in routines %}<label class="check-row"><input type="checkbox" value="{{ routine.id }}"><span>{{ routine.title }}</span></label>{% endfor %}</div>
+                </details>
+            </label>
+            <div class="form-actions"><button class="secondary-button" id="cancel-goal">Cancel</button><button class="primary-button" id="save-goal">Save goal</button></div>
+            <p class="form-error" id="goal-error" hidden></p>
+            </div>
+        </div>
+        <div id="goals-list" class="routine-grid compact-grid"></div>
+        <div id="goals-empty" class="empty-card" hidden><h3>Start with one meaningful target</h3><p>Assign routines and progress will be calculated from their completion history.</p></div>
+    </section>
+</div>
+<script>
+const initialGoals = {{ goals|map('dict')|list|tojson }};
+const csrf = document.querySelector('meta[name="csrf-token"]').content;
+const form = document.getElementById('goal-form');
+const list = document.getElementById('goals-list');
+const empty = document.getElementById('goals-empty');
+const errorBox = document.getElementById('goal-error');
+document.body.appendChild(form);
+function request(url, options = {}) {
+    options.headers = Object.assign({'Content-Type': 'application/json', 'X-CSRFToken': csrf}, options.headers || {});
+    return fetch(url, options).then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Request failed'); return data; });
+}
+function resetForm() {
+    document.getElementById('goal-id').value = '';
+    document.getElementById('goal-name').value = '';
+    document.getElementById('goal-description').value = '';
+    document.querySelectorAll('.goal-routine-picker input').forEach(input => { input.checked = false; });
+    document.getElementById('goal-modal-title').textContent = 'Add goal';
+    document.getElementById('routine-dropdown-label').textContent = 'Select routines';
+    errorBox.hidden = true; form.hidden = true;
+}
+function renderGoals(goals) {
+    list.replaceChildren();
+    empty.hidden = goals.length !== 0;
+    goals.forEach(goal => {
+        const card = document.createElement('article');
+        card.className = 'routine-card goal-card';
+        const icon = document.createElement('span'); icon.className = 'goal-card-icon'; icon.textContent = '♡';
+        const title = document.createElement('h3'); title.textContent = goal.name;
+        const description = document.createElement('p'); description.textContent = goal.description || 'Keep building consistency.';
+        const progress = document.createElement('strong'); progress.textContent = `${goal.progress}%`;
+        const bar = document.createElement('div'); bar.className = 'progress-track';
+        const fill = document.createElement('span'); fill.style.width = `${goal.progress}%`; bar.append(fill);
+        const routines = document.createElement('div'); routines.className = 'goal-routines';
+        (goal.routines || []).forEach(routine => { const item = document.createElement('span'); item.textContent = `✓ ${routine.title}`; routines.append(item); });
+        const actions = document.createElement('div'); actions.className = 'form-actions';
+        const edit = document.createElement('button'); edit.className = 'secondary-button'; edit.textContent = 'Edit'; edit.onclick = () => openEdit(goal);
+        const remove = document.createElement('button'); remove.className = 'text-button'; remove.textContent = 'Archive'; remove.onclick = () => archiveGoal(goal.id);
+        const heading = document.createElement('div'); heading.className = 'goal-card-heading'; heading.append(icon, title);
+        const progressLine = document.createElement('div'); progressLine.className = 'goal-progress-line'; progressLine.append(bar, progress);
+        actions.append(edit, remove); card.append(heading, description, progressLine, routines, actions); list.append(card);
+    });
+}
+function openEdit(goal) {
+    form.hidden = false; document.getElementById('goal-modal-title').textContent = 'Edit goal'; document.getElementById('goal-id').value = goal.id;
+    document.getElementById('goal-name').value = goal.name; document.getElementById('goal-description').value = goal.description || '';
+    document.querySelectorAll('.goal-routine-picker input').forEach(input => { input.checked = (goal.routine_ids || []).includes(Number(input.value)); });
+    updateRoutineLabel();
+}
+async function archiveGoal(id) {
+    if (!window.confirm('Archive this goal?')) return;
+    try { await request(`/api/goals/${id}`, {method: 'DELETE'}); loadGoals(); } catch (error) { errorBox.textContent = error.message; errorBox.hidden = false; }
+}
+async function loadGoals() { const data = await request('/api/goals'); renderGoals(data.goals); }
+function updateRoutineLabel() {
+    const selected = [...document.querySelectorAll('.goal-routine-picker input:checked')].map(input => input.nextElementSibling.textContent);
+    document.getElementById('routine-dropdown-label').textContent = selected.length ? `${selected.length} routine${selected.length === 1 ? '' : 's'} selected` : 'Select routines';
+}
+document.getElementById('new-goal').onclick = () => { resetForm(); form.hidden = false; document.getElementById('goal-name').focus(); };
+document.getElementById('cancel-goal').onclick = resetForm;
+document.getElementById('close-goal').onclick = resetForm;
+document.getElementById('goal-modal-backdrop').onclick = resetForm;
+document.querySelectorAll('.goal-routine-picker input').forEach(input => input.addEventListener('change', updateRoutineLabel));
+document.getElementById('save-goal').onclick = async () => {
+    const id = document.getElementById('goal-id').value;
+    const payload = {name: document.getElementById('goal-name').value, description: document.getElementById('goal-description').value,
+        routine_ids: [...document.querySelectorAll('.goal-routine-picker input:checked')].map(input => Number(input.value))};
+    try { await request(id ? `/api/goals/${id}` : '/api/goals', {method: id ? 'PATCH' : 'POST', body: JSON.stringify(payload)}); resetForm(); loadGoals(); }
+    catch (error) { errorBox.textContent = error.message; errorBox.hidden = false; }
+};
+renderGoals(initialGoals); loadGoals();
+</script>
+</body>
+</html>

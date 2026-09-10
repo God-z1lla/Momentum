@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>Create account | Routine Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <main class="auth-shell">
+        <section class="auth-card">
+            <p class="eyebrow">Routine Tracker</p>
+            <h1>Create account</h1>
+            {% if error %}<p class="auth-error" role="alert">{{ error }}</p>{% endif %}
+            <form method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <label>Display name<input type="text" name="display_name" value="{{ display_name or '' }}" maxlength="100" autocomplete="name"></label>
+                <label>Email<input type="email" name="email" value="{{ email or '' }}" autocomplete="email" required></label>
+                <label>Password<input type="password" name="password" minlength="8" autocomplete="new-password" required></label>
+                <button class="primary-btn" type="submit">Create account</button>
+            </form>
+            <p class="auth-links"><a href="{{ url_for('login') }}">Already have an account? Sign in</a></p>
+        </section>
+    </main>
+</body>
+</html>
