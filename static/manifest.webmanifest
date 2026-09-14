@@ -1,0 +1,9 @@
+{
+  "name": "Routine Tracker",
+  "short_name": "Routines",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f0e8",
+  "theme_color": "#19324a",
+  "description": "A calm, synced routine tracker."
+}

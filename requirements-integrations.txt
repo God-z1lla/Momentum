@@ -1,0 +1,4 @@
+requests>=2.31,<3
+pywebpush>=2.0,<3
+stripe>=10,<12
+waitress>=3,<4
