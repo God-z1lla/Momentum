@@ -46,7 +46,7 @@
     </section>
 </div>
 <script>
-const initialGoals = {{ goals|map('dict')|list|tojson }};
+const initialGoals = [];
 const csrf = document.querySelector('meta[name="csrf-token"]').content;
 const form = document.getElementById('goal-form');
 const list = document.getElementById('goals-list');
